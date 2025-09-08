@@ -118,4 +118,7 @@ Adhere strictly to these instructions, and ensure your output is detailed, accur
         result = self._reflect_on_component(
             "RISK JUDGE", judge_decision, situation, returns_losses
         )
+
+            def _extract_current_situation(self, current_state: Dict[str, Any]) -> str:
+        """Extract the current market situation from the state."""
         risk_manager_memory.add_situations([(situation, result)])

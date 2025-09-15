@@ -30,6 +30,7 @@ class Propagator:
                 {
                     "history": "",
                     "current_risky_response": "",
+                    "current_non_risky_response": "",
                     "current_safe_response": "",
                     "current_neutral_response": "",
                     "count": 0,

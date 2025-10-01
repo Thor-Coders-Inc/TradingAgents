@@ -33,6 +33,19 @@ app = typer.Typer(
     add_completion=True,  # Enable shell completion
 )
 
+# --- Centralized Agent and Team Configuration (NEW) ---
+AGENT_TEAMS_CONFIG = {
+    "Analyst Team": [
+        "Market Analyst",
+        "Social Analyst",
+        "News Analyst",
+        "Fundamentals Analyst",
+    ],
+    "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
+    "Trading Team": ["Trader"],
+    "Risk Management": ["Risky Analyst", "Neutral Analyst", "Safe Analyst"],
+    "Portfolio Management": ["Portfolio Manager"],
+}
 
 # Create a deque to store recent messages with a maximum length
 class MessageBuffer:
@@ -41,25 +54,14 @@ class MessageBuffer:
         self.tool_calls = deque(maxlen=max_length)
         self.current_report = None
         self.final_report = None  # Store the complete final report
+        
+        # --- Dynamically build agent_status from the config (MODIFIED) ---
         self.agent_status = {
-            # Analyst Team
-            "Market Analyst": "pending",
-            "Social Analyst": "pending",
-            "News Analyst": "pending",
-            "Fundamentals Analyst": "pending",
-            # Research Team
-            "Bull Researcher": "pending",
-            "Bear Researcher": "pending",
-            "Research Manager": "pending",
-            # Trading Team
-            "Trader": "pending",
-            # Risk Management Team
-            "Risky Analyst": "pending",
-            "Neutral Analyst": "pending",
-            "Safe Analyst": "pending",
-            # Portfolio Management Team
-            "Portfolio Manager": "pending",
+            agent: "pending"
+            for team in AGENT_TEAMS_CONFIG.values()
+            for agent in team
         }
+        
         self.current_agent = None
         self.report_sections = {
             "market_report": None,
@@ -99,7 +101,7 @@ class MessageBuffer:
             if content is not None:
                 latest_section = section
                 latest_content = content
-               
+                
         if latest_section and latest_content:
             # Format the current section for display
             section_titles = {
@@ -112,7 +114,7 @@ class MessageBuffer:
                 "final_trade_decision": "Portfolio Management Decision",
             }
             self.current_report = (
-                f"### {section_titles[latest_section]}\n{latest_content}"
+                f"### {section_titles.get(latest_section, 'Report')}\n{latest_content}"
             )
 
         # Update the final complete report
@@ -212,42 +214,13 @@ def update_display(layout, spinner_text=None):
     progress_table.add_column("Team", style="cyan", justify="center", width=20)
     progress_table.add_column("Agent", style="green", justify="center", width=20)
     progress_table.add_column("Status", style="yellow", justify="center", width=20)
-
-    # Group agents by team
-    teams = {
-        "Analyst Team": [
-            "Market Analyst",
-            "Social Analyst",
-            "News Analyst",
-            "Fundamentals Analyst",
-        ],
-        "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
-        "Trading Team": ["Trader"],
-        "Risk Management": ["Risky Analyst", "Neutral Analyst", "Safe Analyst"],
-        "Portfolio Management": ["Portfolio Manager"],
-    }
-
-    for team, agents in teams.items():
-        # Add first agent with team name
-        first_agent = agents[0]
-        status = message_buffer.agent_status[first_agent]
-        if status == "in_progress":
-            spinner = Spinner(
-                "dots", text="[blue]in_progress[/blue]", style="bold cyan"
-            )
-            status_cell = spinner
-        else:
-            status_color = {
-                "pending": "yellow",
-                "completed": "green",
-                "error": "red",
-            }.get(status, "white")
-            status_cell = f"[{status_color}]{status}[/{status_color}]"
-        progress_table.add_row(team, first_agent, status_cell)
-
-        # Add remaining agents in team
-        for agent in agents[1:]:
-            status = message_buffer.agent_status[agent]
+    
+    # --- Read directly from the centralized config (MODIFIED) ---
+    for team, agents in AGENT_TEAMS_CONFIG.items():
+        for i, agent in enumerate(agents):
+            team_name = team if i == 0 else "" # Show team name only for the first agent
+            status = message_buffer.agent_status.get(agent, "unknown")
+            
             if status == "in_progress":
                 spinner = Spinner(
                     "dots", text="[blue]in_progress[/blue]", style="bold cyan"
@@ -260,7 +233,8 @@ def update_display(layout, spinner_text=None):
                     "error": "red",
                 }.get(status, "white")
                 status_cell = f"[{status_color}]{status}[/{status_color}]"
-            progress_table.add_row("", agent, status_cell)
+
+            progress_table.add_row(team_name, agent, status_cell)
 
         # Add horizontal line after each team
         progress_table.add_row("─" * 20, "─" * 20, "─" * 20, style="dim")
@@ -268,6 +242,8 @@ def update_display(layout, spinner_text=None):
     layout["progress"].update(
         Panel(progress_table, title="Progress", border_style="cyan", padding=(1, 2))
     )
+
+    # ... (rest of the function is unchanged)
 
     # Messages panel showing recent messages and tool calls
     messages_table = Table(
@@ -391,11 +367,20 @@ def update_display(layout, spinner_text=None):
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
+# ... (The rest of the file remains unchanged)
+
 def get_user_selections():
     """Get all user selections before starting the analysis display."""
     # Display ASCII art welcome message
-    with open("./cli/static/welcome.txt", "r") as f:
-        welcome_ascii = f.read()
+    # A more robust way to handle file paths
+    script_dir = Path(__file__).resolve().parent
+    welcome_file = script_dir / "static/welcome.txt"
+    try:
+        with open(welcome_file, "r") as f:
+            welcome_ascii = f.read()
+    except FileNotFoundError:
+        welcome_ascii = "Welcome to TradingAgents"
+
 
     # Create welcome box content
     welcome_content = f"{welcome_ascii}\n"
@@ -708,7 +693,7 @@ def display_complete_report(final_state):
 
 def update_research_team_status(status):
     """Update status for all research team members and trader."""
-    research_team = ["Bull Researcher", "Bear Researcher", "Research Manager", "Trader"]
+    research_team = AGENT_TEAMS_CONFIG["Research Team"] + AGENT_TEAMS_CONFIG["Trading Team"]
     for agent in research_team:
         message_buffer.update_agent_status(agent, status)
 
@@ -857,7 +842,7 @@ def run_analysis():
                     msg_type = "System"
 
                 # Add message to buffer
-                message_buffer.add_message(msg_type, content)                
+                message_buffer.add_message(msg_type, content)                  
 
                 # If it's a tool call, add it to tool calls
                 if hasattr(last_message, "tool_calls"):
